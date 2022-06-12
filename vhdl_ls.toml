@@ -1,0 +1,10 @@
+# auto-generated
+[Libraries]
+work.files = [
+	'LEDDisplay.vhd'
+]
+[libraries.work]
+files = [
+	'LEDDisplay.vhd'
+]
+# auto-generated-end
