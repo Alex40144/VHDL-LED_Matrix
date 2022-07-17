@@ -1,5 +1,6 @@
 ﻿<Project>
   <ItemGroup>
+    <File Include="LEDDisplay.sdc" />
     <File Include="LEDDisplay.vhd" />
   </ItemGroup>
   <PropertyGroup>
