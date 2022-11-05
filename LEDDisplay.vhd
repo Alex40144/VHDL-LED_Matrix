@@ -23,25 +23,53 @@ entity LEDDisplay is
         
         uart_Rx : in std_logic
     );
+    
+
 end entity LEDDisplay;
 
 architecture rtl of LEDDisplay is
-    signal counter : integer range 0 to 1000000 := 0;
+    component PLL is
+        port
+        (
+            inclk0 : in STD_LOGIC ;
+            c0     : OUT STD_LOGIC ;
+            c1     : OUT STD_LOGIC
+        );
+    end component;
+    
+    signal counter : integer range 0 to 10000 := 0;
     signal column : integer range 0 to 64 := 0;
     signal row : std_logic_vector (4 downto 0) := "00000";
-    signal pixel :integer range 0 to 6144;
+    signal pixel :integer range 0 to 6143;
     signal PWM_Counter : integer range 0 to 255 := 0;
     
     TYPE MAIN_STATE_TYPE IS (SET_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, WAIT_STATE, BLANK, UNBLANK);
     signal MAIN_STATE : MAIN_STATE_TYPE := WAIT_STATE;
     
     type t_matrix is array (0 to 2) of integer range 0 to 255; --r,g,b
-    signal DATA : t_matrix := (others=>0);
+    signal Data : t_matrix := (others=>0);
+    
+    signal CLK_48 : std_logic;
+    signal CLK_96: std_logic ;
+
 begin
+    
+    Data(0) <= 150;
+    Data(1) <= 150;
+    Data(2) <= 0;
+    
+    PLL_1: PLL
+    port map
+    (
+        inclk0 => CLK,
+        c0     => CLK_48,
+        c1     => CLK_96
+    );
+
+
     process(CLK)
     begin
         if rising_edge(CLK) then
-            counter <= counter + 1;
             case (MAIN_STATE) is
                 when SET_ROW =>
                     row <= std_logic_vector( unsigned(row) + 1 );
@@ -51,95 +79,88 @@ begin
                     D <= row(3);
                     E <= row(4);
                     
-                    --increment PWM counter
-                    PWM_Counter <= PWM_Counter + 1;
                     
                     MAIN_STATE <= SHIFT_STATE_1;
                 when SHIFT_STATE_1=>
+                    if UNSIGNED(row) = 0 then
+                        --increment PWM counter
+                        PWM_Counter <= PWM_Counter + 1;
+                    end if;
                     CLOCK <= '0';
-                    --generate data in this state to avoid variables
-                    if(pixel + unsigned(row) < 85) then
-                        DATA <= (pixel + to_integer(unsigned(row)) * 3, 255 - pixel + to_integer(unsigned(row)), 0);
-                    elsif (pixel + row < 170) then
-                        DATA <= (255 - pixel + to_integer(unsigned(row)) * 3, 0, pixel + to_integer(unsigned(row)) * 3);
-                    else
-                        DATA <= (0, pixel + to_integer(unsigned(row)) * 3, 255 - pixel + to_integer(unsigned(row)) * 3);
-                    end if;
                     MAIN_STATE <= SHIFT_STATE_2;
-                    when SHIFT_STATE_2 =>
-
-                    --set data
-                                if(Data(0) < PWM_Counter) then
-                                    R1 <= '1';
-                                else
-                                    R1 <= '0';
-                                end if;
-                                
-                                if(Data(0) < PWM_Counter) then
-                                    R2 <= '1';
-                                else
-                                    R2 <= '0';
-                                end if;
-                                
-                                if(Data(1) < PWM_Counter) then
-                                    B1 <= '1';
-                                else
-                                    B1 <= '0';
-                                end if;
-                                
-                                if(Data(1) < PWM_Counter) then
-                                    B2 <= '1';
-                                else
-                                    B2 <= '0';
-                                end if;
-                                
-                                if(Data(2) < PWM_Counter) then
-                                    G1 <= '1';
-                                else
-                                    G1 <= '0';
-                                end if;
-                                
-                                if(Data(2) < PWM_Counter) then
-                                    G2 <= '1';
-                                else
-                                    G2 <= '0';
-                                end if;
-                                
-                    --increment pixel counter
-                                pixel <= pixel + 1;
-                                
-                                MAIN_STATE <= SHIFT_STATE_3;
-                            when SHIFT_STATE_3 =>
-                                CLOCK <= '1';
-                                column <= column + 1;
-                                if(column > 32) then
-                                    column <= 0;
-                                    MAIN_STATE <= BLANK;
-                                else
-                                    MAIN_STATE <= SHIFT_STATE_1;
-                                end if;
-                            when BLANK =>
-                    --Blank LEDs
-                                OE <= '1';
-                    --set address with ABCD
-                    --Latch Data to output register
-                                LATCH <= '1';
-                                MAIN_STATE <= UNBLANK;
-                            when UNBLANK =>
-                    --remove latch signal
-                                LATCH <= '0';
-                    --enable LEDs
-                                OE <= '0';
-                    --set state to wait
-                                MAIN_STATE <= WAIT_STATE;
-                            when WAIT_STATE =>
-                    --if time has passed then send new data.
-                    --this is a sort of frames per second
-                                if(counter > 100) then
-                                    counter <= 0;
-                                    MAIN_STATE <= SET_ROW;
-                                end if;
-                        end case;
+                when SHIFT_STATE_2 =>
+                    if(PWM_Counter < DATA(0)) then
+                        R1 <= '1';
+                    else
+                        R1 <= '0';
                     end if;
-            end process;
-        end architecture rtl;
+                    
+                    if(PWM_Counter < DATA(0)) then
+                        R2 <= '1';
+                    else
+                        R2 <= '0';
+                    end if;
+                    
+                    if(PWM_Counter < DATA(1)) then
+                        G1 <= '1';
+                    else
+                        G1 <= '0';
+                    end if;
+                    
+                    if(PWM_Counter < DATA(1)) then
+                        G2 <= '1';
+                    else
+                        G2 <= '0';
+                    end if;
+                    
+                    if(PWM_Counter < DATA(2)) then
+                        B1 <= '1';
+                    else
+                        B1 <= '0';
+                    end if;
+                    
+                    if(PWM_Counter < DATA(2)) then
+                        B2 <= '1';
+                    else
+                        B2 <= '0';
+                    end if;
+                    
+        --increment pixel counter
+                    pixel <= pixel + 1;
+                    
+                    MAIN_STATE <= SHIFT_STATE_3;
+                when SHIFT_STATE_3 =>
+                    CLOCK <= '1';
+                    column <= column + 1;
+                    if(column > 32) then
+                        column <= 0;
+                        MAIN_STATE <= BLANK;
+                    else
+                        MAIN_STATE <= SHIFT_STATE_1;
+                    end if;
+                when BLANK =>
+        --Blank LEDs
+                    OE <= '1';
+        --set address with ABCD
+        --Latch Data to output register
+                    LATCH <= '1';
+                    MAIN_STATE <= UNBLANK;
+                when UNBLANK =>
+        --remove latch signal
+                    LATCH <= '0';
+        --enable LEDs
+                    OE <= '0';
+        --set state to wait
+                    MAIN_STATE <= WAIT_STATE;
+                when WAIT_STATE =>
+        --if time has passed then send new data.
+        --this is a sort of frames per second
+                    counter <= counter + 1;
+                    if(counter > 10) then
+                        counter <= 0;
+                        MAIN_STATE <= SET_ROW;
+                    end if;
+            end case;
+        end if;
+    end process;
+end architecture rtl;

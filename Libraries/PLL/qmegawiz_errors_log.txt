@@ -1,0 +1,10 @@
+
+
+C:/Users/alex/Desktop/repos/VHDL-LED_Matrix/Libraries/PLL/PLL.vhd
+
+Nov 05 08PM:18:01>: Error in CNX file format.
+
+Error messages are listed in file
+C:/Users/alex/Desktop/repos/VHDL-LED_Matrix/Libraries/PLL/PLL.cnxerr.
+
+Can't create the custom megafunction variation file(s)

@@ -1,5 +1,7 @@
 ﻿<Project>
   <ItemGroup>
+    <File Include="Libraries/PLL/PLL.qip" />
+    <File Include="Libraries/PLL/PLL.vhd" />
     <File Include="LEDDisplay.sdc" />
     <File Include="LEDDisplay.vhd" />
   </ItemGroup>

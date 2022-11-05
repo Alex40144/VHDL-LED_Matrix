@@ -1,10 +1,12 @@
 # auto-generated
 [Libraries]
 work.files = [
-	'LEDDisplay.vhd'
+	'LEDDisplay.vhd',
+	'Libraries/PLL/PLL.vhd'
 ]
 [libraries.work]
 files = [
-	'LEDDisplay.vhd'
+	'LEDDisplay.vhd',
+	'Libraries/PLL/PLL.vhd'
 ]
 # auto-generated-end
