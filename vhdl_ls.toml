@@ -2,11 +2,17 @@
 [Libraries]
 work.files = [
 	'LEDDisplay.vhd',
-	'Libraries/PLL/PLL.vhd'
+	'Libraries/PLL/PLL.vhd',
+	'RAM.vhd',
+	'Generated/UART_Array.vhd',
+	'Generated/UART_Interface.vhd'
 ]
 [libraries.work]
 files = [
 	'LEDDisplay.vhd',
-	'Libraries/PLL/PLL.vhd'
+	'Libraries/PLL/PLL.vhd',
+	'RAM.vhd',
+	'Generated/UART_Array.vhd',
+	'Generated/UART_Interface.vhd'
 ]
 # auto-generated-end

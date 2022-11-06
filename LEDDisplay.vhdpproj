@@ -1,9 +1,14 @@
 ﻿<Project>
   <ItemGroup>
+    <File Include="Generated/UART_Array.vhd" />
+    <File Include="Generated/UART_Interface.vhd" />
     <File Include="Libraries/PLL/PLL.qip" />
     <File Include="Libraries/PLL/PLL.vhd" />
+    <File Include="Libraries/UART.vhdp" />
+    <File Include="Libraries/UART_Array.vhdp" />
     <File Include="LEDDisplay.sdc" />
     <File Include="LEDDisplay.vhd" />
+    <File Include="RAM.vhd" />
   </ItemGroup>
   <PropertyGroup>
     <HardwareStartPath>LEDDisplay.vhd</HardwareStartPath>
