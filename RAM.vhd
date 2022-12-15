@@ -30,7 +30,7 @@ ARCHITECTURE rtl OF ram_dual IS
 BEGIN
     PROCESS (clock1)
     BEGIN
-        IF (clock1'event AND clock1 = '1') THEN
+        IF rising_edge(clock1) THEN
             IF (we = '1') THEN
                 ram_block(write_address) <= data;
             END IF;
@@ -38,7 +38,7 @@ BEGIN
     END PROCESS;
     PROCESS (clock2)
     BEGIN
-        IF (clock2'event AND clock2 = '1') THEN
+        IF rising_edge(clock2) THEN
             q <= ram_block(read_address);
         END IF;
     END PROCESS;

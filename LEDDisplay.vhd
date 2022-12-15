@@ -78,17 +78,24 @@ architecture rtl of LEDDisplay is
         );
     end component;
     
-    
+    function reverse_any_vector (a: in std_logic_vector)
+    return std_logic_vector is
+        variable result: std_logic_vector(a'RANGE);
+        alias aa: std_logic_vector(a'REVERSE_RANGE) is a;
+    begin
+        for i in aa'RANGE loop
+            result(i) := aa(i);
+        end loop;
+        return result;
+    end; -- function reverse_any_vector
+
     
     signal RESET : std_logic := '1';
     
-    signal counter : integer range 0 to 10000 := 0;
-    signal column : integer range 0 to 63 := 0;
     signal row : std_logic_vector (4 downto 0) := "00000";
-    signal pixel :integer range 0 to 6143;
     signal PWM_Counter : integer range 0 to 31 := 0;
     
-    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, WAIT_STATE, BLANK, UNBLANK);
+    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, SHIFT_STATE_4, WAIT_STATE, BLANK, UNBLANK);
     signal MAIN_STATE : MAIN_STATE_TYPE := WAIT_STATE;
     
     
@@ -101,13 +108,14 @@ architecture rtl of LEDDisplay is
     signal RAM_Write_Enable : std_logic;
     signal RAM_Data_Out : std_logic_vector(31 downto 0);
 
-    signal RX_Bytes      : NATURAL range 0 to 8191;
+    signal RX_Bytes      : NATURAL range 0 to 3;
     signal RX_Data       : UART_Data_Array (3 downto 0);
     signal RX_Busy       : STD_LOGIC;
     signal RX_Error      : STD_LOGIC;
     
     signal last_Rx_Busy : std_logic;
-    signal uart_receive_counter : integer range 0 to 2047 := 0;
+    signal last_last_Rx_Busy : std_logic;
+    signal uart_receive_counter : integer range 0 to 2047 := 0; --0 to max pixel
 begin
     PLL_1: PLL
     port map
@@ -133,7 +141,7 @@ begin
     generic map
     (
         CLK_Frequency => 96000000,
-        Baudrate      => 9600,
+        Baudrate      => 115200,
         Parity        => 0,
         Parity_EO     => '0',
         RX_Timeout    => 100,
@@ -158,16 +166,15 @@ begin
 
 
     process(CLK_96, RESET)
+    variable column : integer range 0 to 64 := 0;
     begin
-        if RESET then
-            counter <= 0;
-            column <= 0;
+        if RESET = '1' then
+            column := 0;
             row <= "00000";
-            pixel <= 0;
             PWM_Counter <= 0;
             RESET <= '0';
+            MAIN_STATE <= WAIT_STATE;
         elsif rising_edge(CLK_96) then
-            counter <= counter + 1;
             case (MAIN_STATE) is
                 when SET_ROW =>
                     row <= std_logic_vector( unsigned(row) + 1 );
@@ -186,28 +193,37 @@ begin
                         PWM_Counter <= PWM_Counter + 1;
                     end if;
                     CLOCK <= '0';
-                    MAIN_STATE <= SHIFT_STATE_2;
                     --load from RAM
                     RAM_Read_Address <= (to_integer(unsigned(row))*64) + column;
-                    
-                when SHIFT_STATE_2 =>
+                    MAIN_STATE <= SHIFT_STATE_2;
 
+                when SHIFT_STATE_2 =>
+                    MAIN_STATE <= SHIFT_STATE_3;
+                    
+                when SHIFT_STATE_3 =>
                     if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(29 DOWNTO 25))) then
                         R1 <= '1';
                     else
                         R1 <= '0';
                     end if;
-
-                    if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(14 DOWNTO 10))) then
-                        R2 <= '1';
-                    else
-                        R2 <= '0';
-                    end if;
-
+                    
                     if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(24 DOWNTO 20))) then
                         G1 <= '1';
                     else
                         G1 <= '0';
+                    end if;
+                    
+                    if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(19 DOWNTO 15))) then
+                        B1 <= '1';
+                    else
+                        B1 <= '0';
+                    end if;
+
+                    
+                    if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(14 DOWNTO 10))) then
+                        R2 <= '1';
+                    else
+                        R2 <= '0';
                     end if;
 
                     if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(9 DOWNTO 5))) then
@@ -216,27 +232,19 @@ begin
                         G2 <= '0';
                     end if;
 
-                    if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(19 DOWNTO 15))) then
-                        B1 <= '1';
-                    else
-                        B1 <= '0';
-                    end if;
-
                     if(to_unsigned(PWM_Counter, 5) < unsigned(RAM_Data_Out(4 DOWNTO 0))) then
                         B2 <= '1';
                     else
                         B2 <= '0';
                     end if;
                     
-        --increment pixel counter
-                    pixel <= pixel + 1;
                     
-                    MAIN_STATE <= SHIFT_STATE_3;
-                when SHIFT_STATE_3 =>
+                    MAIN_STATE <= SHIFT_STATE_4;
+                when SHIFT_STATE_4 =>
                     CLOCK <= '1';
-                    column <= column + 1;
-                    if(column > 62) then
-                        column <= 0;
+                    column := column + 1;
+                    if(column > 63) then
+                        column := 0;
                         MAIN_STATE <= BLANK;
                     else
                         MAIN_STATE <= SHIFT_STATE_1;
@@ -256,12 +264,7 @@ begin
         --set state to wait
                     MAIN_STATE <= WAIT_STATE;
                 when WAIT_STATE =>
-        --if time has passed then send new data.
-        --this is a sort of frames per second
-                    if(counter > 10) then
-                        counter <= 0;
-                        MAIN_STATE <= SET_ROW;
-                    end if;
+                    MAIN_STATE <= SET_ROW;
             end case;
         end if;
     end process;
@@ -269,9 +272,10 @@ begin
     process(CLK_96)
     begin
         if rising_edge(CLK_96) then
+            last_last_Rx_Busy <= last_Rx_Busy; -- two clock edges since busy
             last_Rx_Busy <= RX_Busy;
-            if (last_Rx_Busy = '1' and RX_Busy = '0') then
-                RAM_Data_In <= RX_Data(3) & RX_Data(2) & RX_Data(1) & RX_Data(0);
+            if (last_last_Rx_Busy = '1' and last_Rx_Busy = '0' and RX_Busy = '0') then --if finished receiving
+                RAM_Data_In <= RX_Data(0) & RX_Data(1) & RX_Data(2) & RX_Data(3);
                 RAM_Write_Address <= uart_receive_counter;
                 uart_receive_counter <= uart_receive_counter + 1;
                 RAM_Write_Enable <= '1';
@@ -280,4 +284,5 @@ begin
             end if;
         end if;
     end process;
+    
 end architecture rtl;
