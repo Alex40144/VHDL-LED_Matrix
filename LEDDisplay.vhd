@@ -185,16 +185,17 @@ begin
                     C <= row(2);
                     D <= row(3);
                     E <= row(4);
-                    MAIN_STATE <= SHIFT_STATE_1;
-                    
-                when SHIFT_STATE_1=>
                     if UNSIGNED(row) = 0 then
                         --increment PWM counter
                         PWM_Counter <= PWM_Counter + 1;
                     end if;
+                    MAIN_STATE <= SHIFT_STATE_1;
+                    
+                when SHIFT_STATE_1=>
+                    
                     CLOCK <= '0';
                     --load from RAM
-                    RAM_Read_Address <= (to_integer(unsigned(row))*64) + column;
+                    RAM_Read_Address <= (to_integer(unsigned(row))*64) + column + 64; -- + 64 is a bodge
                     MAIN_STATE <= SHIFT_STATE_2;
 
                 when SHIFT_STATE_2 =>
@@ -277,12 +278,17 @@ begin
             if (last_last_Rx_Busy = '1' and last_Rx_Busy = '0' and RX_Busy = '0') then --if finished receiving
                 RAM_Data_In <= RX_Data(0) & RX_Data(1) & RX_Data(2) & RX_Data(3);
                 RAM_Write_Address <= uart_receive_counter;
-                uart_receive_counter <= uart_receive_counter + 1;
+                --if word starts with a one, then reset the receive counter.
+                if RX_Data(0)(7) = '1' then
+                    uart_receive_counter <= 1;
+                else
+                    uart_receive_counter <= uart_receive_counter + 1;
+                end if;
                 RAM_Write_Enable <= '1';
             else
                 RAM_Write_Enable <= '0';
             end if;
         end if;
     end process;
-    
-end architecture rtl;
+        
+    end architecture rtl;
