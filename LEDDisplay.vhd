@@ -115,7 +115,6 @@ architecture rtl of LEDDisplay is
     
     signal last_Rx_Busy : std_logic;
     signal last_last_Rx_Busy : std_logic;
-    signal uart_receive_counter : integer range 0 to 2047 := 0; --0 to max pixel
 begin
     PLL_1: PLL
     port map
@@ -271,24 +270,24 @@ begin
     end process;
     
     process(CLK_96)
+    variable uart_receive_counter : integer range 0 to 2047 := 0; --0 to max pixel
     begin
         if rising_edge(CLK_96) then
-            last_last_Rx_Busy <= last_Rx_Busy; -- two clock edges since busy
             last_Rx_Busy <= RX_Busy;
-            if (last_last_Rx_Busy = '1' and last_Rx_Busy = '0' and RX_Busy = '0') then --if finished receiving
+            if (last_Rx_Busy = '0' and RX_Busy = '0') then --if finished receiving
                 RAM_Data_In <= RX_Data(0) & RX_Data(1) & RX_Data(2) & RX_Data(3);
-                RAM_Write_Address <= uart_receive_counter;
                 --if word starts with a one, then reset the receive counter.
-                if RX_Data(0)(7) = '1' then
-                    uart_receive_counter <= 1;
+                if RX_Data(0)(3) = '1' then
+                    uart_receive_counter := 1;
                 else
-                    uart_receive_counter <= uart_receive_counter + 1;
+                    uart_receive_counter := uart_receive_counter + 1;
                 end if;
+                RAM_Write_Address <= uart_receive_counter;
                 RAM_Write_Enable <= '1';
             else
                 RAM_Write_Enable <= '0';
             end if;
         end if;
     end process;
-        
-    end architecture rtl;
+    
+end architecture rtl;
