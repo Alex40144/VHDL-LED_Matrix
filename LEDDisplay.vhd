@@ -21,7 +21,9 @@ entity LEDDisplay is
         CLOCK : out std_logic := '0';
         OE : out std_logic := '0';
         
-        uart_Rx : in std_logic
+        uart_Rx : in std_logic;
+        
+        uart_passthrough: out std_logic
     );
     
 
@@ -59,7 +61,7 @@ architecture rtl of LEDDisplay is
             Parity        : INTEGER  := 0;
             Parity_EO     : STD_LOGIC  := '0';
             RX_Timeout    : NATURAL  := 100;
-            Max_Bytes     : NATURAL  := 8192
+            Max_Bytes     : NATURAL  := 4
         );
         port
         (
@@ -140,10 +142,10 @@ begin
     generic map
     (
         CLK_Frequency => 96000000,
-        Baudrate      => 115200,
+        Baudrate      => 9600,
         Parity        => 0,
         Parity_EO     => '0',
-        RX_Timeout    => 100,
+        RX_Timeout    => 10,
         Max_Bytes     => 4
     )
     port map
@@ -162,7 +164,7 @@ begin
         RX_Error      => RX_Error
     );
 
-
+    uart_passthrough <= uart_Rx;
 
     process(CLK_96, RESET)
     variable column : integer range 0 to 64 := 0;
@@ -274,11 +276,11 @@ begin
     begin
         if rising_edge(CLK_96) then
             last_Rx_Busy <= RX_Busy;
-            if (last_Rx_Busy = '0' and RX_Busy = '0') then --if finished receiving
+            if (last_Rx_Busy = '1' and RX_Busy = '0') then --if finished receiving
                 RAM_Data_In <= RX_Data(0) & RX_Data(1) & RX_Data(2) & RX_Data(3);
                 --if word starts with a one, then reset the receive counter.
-                if RX_Data(0)(3) = '1' then
-                    uart_receive_counter := 1;
+                if RX_Data(0)(7) = '1' then
+                    --uart_receive_counter := 0;
                 else
                     uart_receive_counter := uart_receive_counter + 1;
                 end if;
