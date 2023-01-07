@@ -142,10 +142,10 @@ begin
     generic map
     (
         CLK_Frequency => 96000000,
-        Baudrate      => 9600,
+        Baudrate      => 460800,
         Parity        => 0,
         Parity_EO     => '0',
-        RX_Timeout    => 10,
+        RX_Timeout    => 100,
         Max_Bytes     => 4
     )
     port map
@@ -280,7 +280,7 @@ begin
                 RAM_Data_In <= RX_Data(0) & RX_Data(1) & RX_Data(2) & RX_Data(3);
                 --if word starts with a one, then reset the receive counter.
                 if RX_Data(0)(7) = '1' then
-                    --uart_receive_counter := 0;
+                    uart_receive_counter := 0;
                 else
                     uart_receive_counter := uart_receive_counter + 1;
                 end if;
