@@ -2,7 +2,7 @@ LIBRARY ieee;
 USE ieee.std_logic_1164.ALL;
 PACKAGE ram_package IS
     CONSTANT ram_width : INTEGER := 32;
-    CONSTANT ram_depth : INTEGER := 2048;
+    CONSTANT ram_depth : INTEGER := 16383;
     
     TYPE word IS ARRAY(0 to ram_width - 1) of std_logic;
     TYPE ram IS ARRAY(0 to ram_depth - 1) of word;

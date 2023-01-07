@@ -21,9 +21,7 @@ entity LEDDisplay is
         CLOCK : out std_logic := '0';
         OE : out std_logic := '0';
         
-        uart_Rx : in std_logic;
-        
-        uart_passthrough: out std_logic
+        uart_Rx : in std_logic
     );
     
 
@@ -45,8 +43,8 @@ architecture rtl of LEDDisplay is
             clock1        : IN std_logic ;
             clock2        : IN std_logic ;
             data          : IN std_logic_vector (31 DOWNTO 0);
-            write_address : IN integer RANGE 0 to 2047;
-            read_address  : IN integer RANGE 0 to 2047;
+            write_address : IN integer RANGE 0 to 16383;
+            read_address  : IN integer RANGE 0 to 16383;
             we            : IN std_logic ;
             q             : OUT std_logic_vector (31 DOWNTO 0)
         );
@@ -80,24 +78,12 @@ architecture rtl of LEDDisplay is
         );
     end component;
     
-    function reverse_any_vector (a: in std_logic_vector)
-    return std_logic_vector is
-        variable result: std_logic_vector(a'RANGE);
-        alias aa: std_logic_vector(a'REVERSE_RANGE) is a;
-    begin
-        for i in aa'RANGE loop
-            result(i) := aa(i);
-        end loop;
-        return result;
-    end; -- function reverse_any_vector
-
-    
     signal RESET : std_logic := '1';
     
     signal row : std_logic_vector (4 downto 0) := "00000";
     signal PWM_Counter : integer range 0 to 31 := 0;
     
-    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, SHIFT_STATE_4, WAIT_STATE, BLANK, UNBLANK);
+    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, SHIFT_STATE_4, WAIT_STATE, BLANK, UNBLANK, UNLATCH);
     signal MAIN_STATE : MAIN_STATE_TYPE := WAIT_STATE;
     
     
@@ -105,8 +91,8 @@ architecture rtl of LEDDisplay is
     signal CLK_96: std_logic ;
     
     signal RAM_Data_In : std_logic_vector(31 downto 0);
-    signal RAM_Write_Address : integer RANGE 0 to 2047;
-    signal RAM_Read_Address : integer RANGE 0 to 2047;
+    signal RAM_Write_Address : integer RANGE 0 to 16383;
+    signal RAM_Read_Address : integer RANGE 0 to 16383;
     signal RAM_Write_Enable : std_logic;
     signal RAM_Data_Out : std_logic_vector(31 downto 0);
 
@@ -123,7 +109,7 @@ begin
     (
         inclk0 => CLK,
         c0     => CLK_48,
-        c1     => CLK_96
+        c1     => CLK_96 --60M
     );
     
     RAM_1: ram_dual
@@ -141,7 +127,7 @@ begin
     UART_1: UART_Array
     generic map
     (
-        CLK_Frequency => 96000000,
+        CLK_Frequency => 60000000,
         Baudrate      => 460800,
         Parity        => 0,
         Parity_EO     => '0',
@@ -151,7 +137,7 @@ begin
     port map
     (
         CLK           => CLK_96,
-        Reset         => '0',
+        Reset         => RESET,
         RX            => uart_Rx,
         TX            => open,
         TX_Enable     => open,
@@ -164,10 +150,8 @@ begin
         RX_Error      => RX_Error
     );
 
-    uart_passthrough <= uart_Rx;
-
     process(CLK_96, RESET)
-    variable column : integer range 0 to 64 := 0;
+    variable column : integer range 0 to 256 := 0;
     begin
         if RESET = '1' then
             column := 0;
@@ -177,26 +161,15 @@ begin
             MAIN_STATE <= WAIT_STATE;
         elsif rising_edge(CLK_96) then
             case (MAIN_STATE) is
-                when SET_ROW =>
-                    row <= std_logic_vector( unsigned(row) + 1 );
-                    MAIN_STATE <= UPDATE_ROW;
                 when UPDATE_ROW =>
-                    A <= row(0);
-                    B <= row(1);
-                    C <= row(2);
-                    D <= row(3);
-                    E <= row(4);
-                    if UNSIGNED(row) = 0 then
-                        --increment PWM counter
-                        PWM_Counter <= PWM_Counter + 1;
-                    end if;
+                    row <= std_logic_vector( unsigned(row) + 1 );
                     MAIN_STATE <= SHIFT_STATE_1;
                     
                 when SHIFT_STATE_1=>
                     
                     CLOCK <= '0';
                     --load from RAM
-                    RAM_Read_Address <= (to_integer(unsigned(row))*64) + column + 64; -- + 64 is a bodge
+                    RAM_Read_Address <= (to_integer(unsigned(row))*256) + column;
                     MAIN_STATE <= SHIFT_STATE_2;
 
                 when SHIFT_STATE_2 =>
@@ -245,34 +218,47 @@ begin
                 when SHIFT_STATE_4 =>
                     CLOCK <= '1';
                     column := column + 1;
-                    if(column > 63) then
+                    if(column > 255) then
                         column := 0;
                         MAIN_STATE <= BLANK;
                     else
                         MAIN_STATE <= SHIFT_STATE_1;
                     end if;
+                    
                 when BLANK =>
-        --Blank LEDs
                     OE <= '1';
-        --set address with ABCD
-        --Latch Data to output register
+                    MAIN_STATE <= SET_ROW;
+                    
+                when SET_ROW =>
+                    A <= row(0);
+                    B <= row(1);
+                    C <= row(2);
+                    D <= row(3);
+                    E <= row(4);
+                    if UNSIGNED(row) = 0 then
+                        --increment PWM counter
+                        PWM_Counter <= PWM_Counter + 1;
+                    end if;
+                    MAIN_STATE <= UNLATCH;
+                    
+                when UNLATCH =>
                     LATCH <= '1';
                     MAIN_STATE <= UNBLANK;
+                    
                 when UNBLANK =>
-        --remove latch signal
                     LATCH <= '0';
-        --enable LEDs
                     OE <= '0';
-        --set state to wait
                     MAIN_STATE <= WAIT_STATE;
+                    
                 when WAIT_STATE =>
-                    MAIN_STATE <= SET_ROW;
+                    MAIN_STATE <= UPDATE_ROW;
+                    
             end case;
         end if;
     end process;
     
     process(CLK_96)
-    variable uart_receive_counter : integer range 0 to 2047 := 0; --0 to max pixel
+    variable uart_receive_counter : integer range 0 to 16383 := 0; --0 to max pixel
     begin
         if rising_edge(CLK_96) then
             last_Rx_Busy <= RX_Busy;
