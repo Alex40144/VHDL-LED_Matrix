@@ -21,9 +21,7 @@ entity LEDDisplay is
         CLOCK : out std_logic := '0';
         OE : out std_logic := '0';
         
-        uart_Rx : in std_logic;
-        
-        uart_passthrough: out std_logic
+        uart_Rx : in std_logic
     );
     
 
@@ -80,24 +78,13 @@ architecture rtl of LEDDisplay is
         );
     end component;
     
-    function reverse_any_vector (a: in std_logic_vector)
-    return std_logic_vector is
-        variable result: std_logic_vector(a'RANGE);
-        alias aa: std_logic_vector(a'REVERSE_RANGE) is a;
-    begin
-        for i in aa'RANGE loop
-            result(i) := aa(i);
-        end loop;
-        return result;
-    end; -- function reverse_any_vector
-
     
     signal RESET : std_logic := '1';
     
     signal row : std_logic_vector (4 downto 0) := "00000";
     signal PWM_Counter : integer range 0 to 31 := 0;
     
-    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, SHIFT_STATE_4, WAIT_STATE, BLANK, UNBLANK);
+    TYPE MAIN_STATE_TYPE IS (SET_ROW, UPDATE_ROW, SHIFT_STATE_1, SHIFT_STATE_2, SHIFT_STATE_3, SHIFT_STATE_4, WAIT_STATE, BLANK, UNBLANK, UNLATCH);
     signal MAIN_STATE : MAIN_STATE_TYPE := WAIT_STATE;
     
     
@@ -164,7 +151,6 @@ begin
         RX_Error      => RX_Error
     );
 
-    uart_passthrough <= uart_Rx;
 
     process(CLK_96, RESET)
     variable column : integer range 0 to 64 := 0;
@@ -177,26 +163,15 @@ begin
             MAIN_STATE <= WAIT_STATE;
         elsif rising_edge(CLK_96) then
             case (MAIN_STATE) is
-                when SET_ROW =>
-                    row <= std_logic_vector( unsigned(row) + 1 );
-                    MAIN_STATE <= UPDATE_ROW;
                 when UPDATE_ROW =>
-                    A <= row(0);
-                    B <= row(1);
-                    C <= row(2);
-                    D <= row(3);
-                    E <= row(4);
-                    if UNSIGNED(row) = 0 then
-                        --increment PWM counter
-                        PWM_Counter <= PWM_Counter + 1;
-                    end if;
+                    row <= std_logic_vector( unsigned(row) + 1 );
                     MAIN_STATE <= SHIFT_STATE_1;
                     
                 when SHIFT_STATE_1=>
                     
                     CLOCK <= '0';
                     --load from RAM
-                    RAM_Read_Address <= (to_integer(unsigned(row))*64) + column + 64; -- + 64 is a bodge
+                    RAM_Read_Address <= (to_integer(unsigned(row))*64) + column;
                     MAIN_STATE <= SHIFT_STATE_2;
 
                 when SHIFT_STATE_2 =>
@@ -251,22 +226,34 @@ begin
                     else
                         MAIN_STATE <= SHIFT_STATE_1;
                     end if;
+
                 when BLANK =>
-        --Blank LEDs
                     OE <= '1';
-        --set address with ABCD
-        --Latch Data to output register
+                    MAIN_STATE <= SET_ROW;
+
+                when SET_ROW =>
+                    A <= row(0);
+                    B <= row(1);
+                    C <= row(2);
+                    D <= row(3);
+                    E <= row(4);
+                    if UNSIGNED(row) = 0 then
+                        --increment PWM counter
+                        PWM_Counter <= PWM_Counter + 1;
+                    end if;
+                    MAIN_STATE <= UNLATCH;
+
+                when UNLATCH =>
                     LATCH <= '1';
                     MAIN_STATE <= UNBLANK;
+
                 when UNBLANK =>
-        --remove latch signal
                     LATCH <= '0';
-        --enable LEDs
                     OE <= '0';
-        --set state to wait
                     MAIN_STATE <= WAIT_STATE;
+
                 when WAIT_STATE =>
-                    MAIN_STATE <= SET_ROW;
+                    MAIN_STATE <= UPDATE_ROW;
             end case;
         end if;
     end process;
